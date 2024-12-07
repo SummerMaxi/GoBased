@@ -103,12 +103,12 @@ struct ARContainerView: View {
                             .background(Color.black.opacity(0.7))
                             .clipShape(Circle())
                     }
-                    .buttonStyle(PlainButtonStyle()) // Prevents tab navigation
+                    .buttonStyle(PlainButtonStyle())
                     
                     // Wallet Button
                     Button(action: {
                         if !walletManager.isConnected {
-                            walletManager.connectWallet()
+                            walletManager.connectWalletInApp()
                         }
                     }) {
                         Image(systemName: walletManager.isConnected ? "wallet.pass.fill" : "wallet.pass")
@@ -123,7 +123,7 @@ struct ARContainerView: View {
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(25)
-                .padding(.bottom, 90) // Adjusted to be above tab bar
+                .padding(.bottom, 90)
                 .padding(.horizontal)
             }
             

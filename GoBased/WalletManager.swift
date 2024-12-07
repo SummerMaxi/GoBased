@@ -10,7 +10,7 @@ class WalletManager: ObservableObject {
     @Published var error: String?
     @Published var isLoading = false
     @Published var connectionStatus: ConnectionStatus = .disconnected
-    @Published var isWalletAppAvailable = false
+    @Published var showingConnectSheet = false
     @Published var balance: String?
     
     // MARK: - Private Properties
@@ -37,36 +37,13 @@ class WalletManager: ObservableObject {
         }
     }
     
-    enum WalletError: LocalizedError {
-        case notConnected
-        case invalidAddress
-        case invalidAmount
-        case networkError(String)
-        case unknown(String)
-        
-        var errorDescription: String? {
-            switch self {
-            case .notConnected:
-                return "Wallet is not connected"
-            case .invalidAddress:
-                return "Invalid wallet address"
-            case .invalidAmount:
-                return "Invalid transaction amount"
-            case .networkError(let message):
-                return "Network error: \(message)"
-            case .unknown(let message):
-                return "Unknown error: \(message)"
-            }
-        }
-    }
-    
     // MARK: - Initialization
     init() {
-        isWalletAppAvailable = CoinbaseWalletSDK.isCoinbaseWalletInstalled()
+        checkWalletAvailability()
     }
     
     // MARK: - Public Methods
-    func connectWallet() {
+    func connectWalletInApp() {
         isLoading = true
         connectionStatus = .connecting
         
@@ -87,15 +64,34 @@ class WalletManager: ObservableObject {
                     case .success(let message):
                         if let firstResult = message.content.first,
                            case .success(let jsonString) = firstResult {
-                            self?.handleSuccessfulConnection(jsonString: jsonString.description)
+                            self?.handleWalletConnection(addressString: jsonString.description)
                         }
                     case .failure(let error):
+                        print("❌ Connection failed: \(error)")
                         self?.handleError(error)
                     }
                 }
             }
         } catch {
+            print("❌ Failed to initiate handshake: \(error)")
             handleError(error)
+        }
+    }
+    
+    private func handleWalletConnection(addressString: String) {
+        if let data = addressString.data(using: .utf8),
+           let addresses = try? JSONDecoder().decode([String].self, from: data),
+           let firstAddress = addresses.first {
+            DispatchQueue.main.async { [weak self] in
+                self?.isConnected = true
+                self?.walletAddress = firstAddress
+                self?.connectionStatus = .connected
+                print("✅ Wallet connected: \(firstAddress)")
+                self?.checkBalance()
+                NotificationCenter.default.post(name: .walletConnected, object: nil)
+            }
+        } else {
+            handleError(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse wallet address"]))
         }
     }
     
@@ -106,12 +102,27 @@ class WalletManager: ObservableObject {
             self?.error = nil
             self?.connectionStatus = .disconnected
             self?.balance = nil
+            NotificationCenter.default.post(name: .walletDisconnected, object: nil)
+        }
+    }
+    
+    private func checkWalletAvailability() {
+        let isAvailable = CoinbaseWalletSDK.isCoinbaseWalletInstalled()
+        print("📱 Coinbase Wallet available: \(isAvailable)")
+    }
+    
+    private func handleError(_ error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isLoading = false
+            self?.error = error.localizedDescription
+            self?.connectionStatus = .failed(error.localizedDescription)
+            print("❌ Wallet error: \(error.localizedDescription)")
         }
     }
     
     func sendTransaction(to: String, amount: String) {
         guard let fromAddress = walletAddress else {
-            handleError(WalletError.notConnected)
+            handleError(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Wallet not connected"]))
             return
         }
         
@@ -137,7 +148,8 @@ class WalletManager: ObservableObject {
                     case .success(let message):
                         if let firstResult = message.content.first,
                            case .success(let jsonString) = firstResult {
-                            print("Transaction sent: \(jsonString.description)")
+                            print("✅ Transaction sent: \(jsonString.description)")
+                            self?.checkBalance()
                         }
                     case .failure(let error):
                         self?.handleError(error)
@@ -146,30 +158,6 @@ class WalletManager: ObservableObject {
             }
         } catch {
             handleError(error)
-        }
-    }
-    
-    // MARK: - Private Methods
-    private func handleSuccessfulConnection(jsonString: String) {
-        if let data = jsonString.data(using: .utf8),
-           let addresses = try? JSONDecoder().decode([String].self, from: data),
-           let firstAddress = addresses.first {
-            DispatchQueue.main.async { [weak self] in
-                self?.isConnected = true
-                self?.walletAddress = firstAddress
-                self?.connectionStatus = .connected
-                self?.checkBalance()
-            }
-        } else {
-            handleError(WalletError.unknown("Failed to parse wallet address"))
-        }
-    }
-    
-    private func handleError(_ error: Error) {
-        DispatchQueue.main.async { [weak self] in
-            self?.isLoading = false
-            self?.error = error.localizedDescription
-            self?.connectionStatus = .failed(error.localizedDescription)
         }
     }
     
@@ -208,6 +196,23 @@ class WalletManager: ObservableObject {
         }
     }
     
+    // MARK: - Helper Methods
+    func validateAddress(_ address: String) -> Bool {
+        let pattern = "^0x[0-9a-fA-F]{40}$"
+        let regex = try? NSRegularExpression(pattern: pattern)
+        let range = NSRange(location: 0, length: address.utf16.count)
+        return regex?.firstMatch(in: address, range: range) != nil
+    }
+    
+    func formatBalance(_ balanceString: String?) -> String {
+        guard let balanceString = balanceString,
+              let balanceInt = Int(balanceString) else {
+            return "0.00"
+        }
+        let balanceDecimal = Decimal(balanceInt) / pow(10, 18) // Convert from wei to ETH
+        return String(format: "%.4f ETH", NSDecimalNumber(decimal: balanceDecimal).doubleValue)
+    }
+    
     // MARK: - Helper Properties
     var statusColor: Color {
         switch connectionStatus {
@@ -239,69 +244,13 @@ class WalletManager: ObservableObject {
         let end = address.suffix(4)
         return "\(start)...\(end)"
     }
-    
-    func formatBalance(_ balanceString: String?) -> String {
-        guard let balanceString = balanceString,
-              let balanceInt = Int(balanceString) else {
-            return "0.00"
-        }
-        let balanceDecimal = Decimal(balanceInt) / pow(10, 18)
-        return String(format: "%.4f ETH", NSDecimalNumber(decimal: balanceDecimal).doubleValue)
-    }
-    
-    // MARK: - Debug Methods
-    #if DEBUG
-    func printWalletStatus() {
-        print("Wallet Status:")
-        print("Connected: \(isConnected)")
-        print("Address: \(walletAddress ?? "None")")
-        print("Balance: \(balance ?? "Unknown")")
-        print("Status: \(connectionStatus.description)")
-        print("App Available: \(isWalletAppAvailable)")
-    }
-    
-    func simulateConnection() {
-        DispatchQueue.main.async { [weak self] in
-            self?.isConnected = true
-            self?.walletAddress = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
-            self?.connectionStatus = .connected
-            self?.balance = "1000000000000000000" // 1 ETH in wei
-        }
-    }
-    
-    func simulateDisconnection() {
-        disconnect()
-    }
-    
-    func simulateError() {
-        handleError(WalletError.networkError("Simulated error for testing"))
-    }
-    #endif
-    
-    // MARK: - Extensions
-    func reset() {
-        DispatchQueue.main.async { [weak self] in
-            self?.isConnected = false
-            self?.walletAddress = nil
-            self?.error = nil
-            self?.isLoading = false
-            self?.connectionStatus = .disconnected
-            self?.balance = nil
-        }
-    }
-    
-    func refreshWalletState() {
-        if isConnected {
-            checkBalance()
-        }
-    }
 }
 
 // MARK: - Notification Names
 extension Notification.Name {
     static let walletConnected = Notification.Name("walletConnected")
     static let walletDisconnected = Notification.Name("walletDisconnected")
-    static let walletTransactionCompleted = Notification.Name("walletTransactionCompleted")
+    static let transactionSent = Notification.Name("transactionSent")
 }
 
 // MARK: - Preview Helper
@@ -309,7 +258,10 @@ extension Notification.Name {
 extension WalletManager {
     static var preview: WalletManager {
         let manager = WalletManager()
-        manager.simulateConnection()
+        manager.isConnected = true
+        manager.walletAddress = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+        manager.connectionStatus = .connected
+        manager.balance = "1000000000000000000" // 1 ETH in wei
         return manager
     }
 }

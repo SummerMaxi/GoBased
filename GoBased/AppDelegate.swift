@@ -3,10 +3,15 @@ import CoinbaseWalletSDK
 
 class AppDelegateClass: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Configure SDK with proper URLs
+        // Configure SDK with proper parameters
         CoinbaseWalletSDK.configure(
             host: URL(string: "https://wallet.coinbase.com")!,
-            callback: URL(string: "gobased://")!
+            callback: URL(string: "gobased://")!,
+            options: .init(
+                preferredHandling: .native, // Prefer native app if installed
+                callbackURLScheme: "gobased",
+                shouldShowCloseButton: true
+            )
         )
         
         print("Coinbase Wallet App installed: \(CoinbaseWalletSDK.isCoinbaseWalletInstalled())")
