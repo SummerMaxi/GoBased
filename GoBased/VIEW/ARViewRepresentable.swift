@@ -32,33 +32,30 @@ struct ARViewRepresentable: UIViewRepresentable {
         func placeLogo(at location: LogoLocation) {
             guard let arView = arView else { return }
             
-            // Create anchor at the specified position
             let anchor = AnchorEntity()
             
             if let modelEntity = try? ModelEntity.load(named: "baselogo.usdz") {
                 modelEntity.position = location.position
-                modelEntity.scale = SIMD3<Float>(repeating: 0.3) // Adjust size as needed
+                modelEntity.scale = SIMD3<Float>(repeating: 0.15) // Reduced size to 0.15
                 modelEntity.generateCollisionShapes(recursive: true)
                 modelEntity.setValue(location.url, forKey: "mintingURL")
                 
-                // Add continuous rotation
-                let rotationAngle = Float.pi * 2
-                let duration: TimeInterval = 8.0 // 8 seconds per rotation
+                // Create slower, smoother rotation
+                let rotationDuration: TimeInterval = 12.0 // Increased duration for slower rotation
                 
-                // Create and start continuous rotation animation
-                modelEntity.transform.rotation = simd_quatf(angle: 0, axis: [0, 1, 0])
-                
-                // Using AsyncStream for continuous rotation
-                Task {
-                    while true {
-                        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-                        DispatchQueue.main.async {
-                            modelEntity.transform.rotation = simd_quatf(
-                                angle: rotationAngle,
-                                axis: [0, 1, 0]
-                            )
-                        }
-                    }
+                // Start continuous rotation using Timer with smaller increments
+                Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { _ in // ~30fps for smoother motion
+                    let rotationAngle = Float(Date().timeIntervalSince1970).remainder(dividingBy: Float(rotationDuration)) * (2 * .pi / Float(rotationDuration))
+                    
+                    // Smooth rotation transition
+                    let currentRotation = modelEntity.orientation
+                    let targetRotation = simd_quatf(angle: rotationAngle, axis: [0, 1, 0])
+                    
+                    // Interpolate between current and target rotation
+                    let smoothFactor: Float = 0.05 // Lower value = smoother transition
+                    let smoothedRotation = simd_slerp(currentRotation, targetRotation, smoothFactor)
+                    
+                    modelEntity.orientation = smoothedRotation
                 }
                 
                 anchor.addChild(modelEntity)
@@ -67,7 +64,7 @@ struct ARViewRepresentable: UIViewRepresentable {
             
             arView.scene.addAnchor(anchor)
         }
-        
+
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let arView = arView else { return }
             

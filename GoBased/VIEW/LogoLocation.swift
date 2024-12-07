@@ -13,8 +13,8 @@ struct LogoLocation: Identifiable {
         for i in 0..<count {
             // Generate random angles and distance
             let angle = Float.random(in: 0...(2 * .pi))
-            let distance = Float.random(in: 3...15)
-            let height = Float.random(in: 0...2)
+            let distance = Float.random(in: 8...80)     // Increased distance range
+            let height = Float.random(in: 0.5...6)    // Adjusted height range
             
             // Convert polar coordinates to Cartesian coordinates
             let x = distance * sin(angle)
@@ -24,7 +24,7 @@ struct LogoLocation: Identifiable {
             
             locations.append(LogoLocation(
                 position: position,
-                url: "https://your-minting-website.com/\(i + 1)"
+                url: "https://www.basefairy.xyz/\(i + 1)"
             ))
         }
         
