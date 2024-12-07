@@ -280,6 +280,7 @@
 				INFOPLIST_FILE = GoBased/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access for AR features";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to show nearby NFTs";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to save your AR selfies";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -313,6 +314,7 @@
 				INFOPLIST_FILE = GoBased/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access for AR features";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to show nearby NFTs";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to save your AR selfies";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

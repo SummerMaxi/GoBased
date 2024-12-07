@@ -2,6 +2,8 @@ import SwiftUI
 import ARKit
 import RealityKit
 import SafariServices
+import AVFoundation
+import Photos
 
 struct ARViewRepresentable: UIViewRepresentable {
     @EnvironmentObject var arExperience: ARExperienceManager
@@ -107,6 +109,33 @@ struct ARViewRepresentable: UIViewRepresentable {
                         }
                         break
                     }
+                }
+            }
+        }
+        
+        // Selfie capture function
+        func captureSelfie() {
+            guard let arView = arView else { return }
+            
+            let config = ARWorldTrackingConfiguration()
+            
+            DispatchQueue.main.async {
+                // Capture the AR view
+                let image = arView.snapshot(saveToHDR: false) { snapshotImage in
+                    if let image = snapshotImage {
+                        // Save captured image to photo library
+                        UIImageWriteToSavedPhotosAlbum(image, self, #selector(self.image(_:didFinishSavingWithError:contextInfo:)), nil)
+                    }
+                }
+            }
+        }
+        
+        @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
+            if let error = error {
+                print("Error saving photo: \(error.localizedDescription)")
+            } else {
+                DispatchQueue.main.async {
+                    print("Photo saved successfully!")
                 }
             }
         }
