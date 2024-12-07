@@ -11,10 +11,16 @@
 			</array>
 		</dict>
 	</array>
+	<key>Identifier</key>
+	<string>com.Charnockite.GoBased</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>cbwallet</string>
 	</array>
+	<key>LSApplicationQueriesSchemes:</key>
+	<string>cbwallet</string>
+	<key>URL Schemes:</key>
+	<string>gobased</string>
 	<key>URL Types</key>
 	<string>gobased</string>
 	<key>We need camera access for AR features</key>

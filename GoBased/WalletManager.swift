@@ -3,6 +3,33 @@ import CoinbaseWalletSDK
 import Combine
 import SwiftUI
 
+// MARK: - WalletConnectRequest
+struct WalletConnectRequest {
+    let chainId: String
+    let methods: [String]
+    let appName: String
+    let appLogoUrl: String?
+    let description: String?
+    
+    var dictionary: [String: Any] {
+        var dict: [String: Any] = [
+            "chainId": chainId,
+            "methods": methods,
+            "appName": appName
+        ]
+        
+        if let logo = appLogoUrl {
+            dict["appLogoUrl"] = logo
+        }
+        
+        if let desc = description {
+            dict["description"] = desc
+        }
+        
+        return dict
+    }
+}
+
 class WalletManager: ObservableObject {
     // MARK: - Published Properties
     @Published var isConnected = false
@@ -47,9 +74,11 @@ class WalletManager: ObservableObject {
         isLoading = true
         connectionStatus = .connecting
         
+        let request = createConnectRequest()
+        
         let action = Action(
             method: "eth_requestAccounts",
-            params: [:],
+            params: request.dictionary,
             optional: false
         )
         
@@ -62,6 +91,7 @@ class WalletManager: ObservableObject {
                     
                     switch result {
                     case .success(let message):
+                        print("✅ Success response received: \(message)")
                         if let firstResult = message.content.first,
                            case .success(let jsonString) = firstResult {
                             self?.handleWalletConnection(addressString: jsonString.description)
@@ -78,23 +108,6 @@ class WalletManager: ObservableObject {
         }
     }
     
-    private func handleWalletConnection(addressString: String) {
-        if let data = addressString.data(using: .utf8),
-           let addresses = try? JSONDecoder().decode([String].self, from: data),
-           let firstAddress = addresses.first {
-            DispatchQueue.main.async { [weak self] in
-                self?.isConnected = true
-                self?.walletAddress = firstAddress
-                self?.connectionStatus = .connected
-                print("✅ Wallet connected: \(firstAddress)")
-                self?.checkBalance()
-                NotificationCenter.default.post(name: .walletConnected, object: nil)
-            }
-        } else {
-            handleError(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse wallet address"]))
-        }
-    }
-    
     func disconnect() {
         DispatchQueue.main.async { [weak self] in
             self?.isConnected = false
@@ -103,20 +116,6 @@ class WalletManager: ObservableObject {
             self?.connectionStatus = .disconnected
             self?.balance = nil
             NotificationCenter.default.post(name: .walletDisconnected, object: nil)
-        }
-    }
-    
-    private func checkWalletAvailability() {
-        let isAvailable = CoinbaseWalletSDK.isCoinbaseWalletInstalled()
-        print("📱 Coinbase Wallet available: \(isAvailable)")
-    }
-    
-    private func handleError(_ error: Error) {
-        DispatchQueue.main.async { [weak self] in
-            self?.isLoading = false
-            self?.error = error.localizedDescription
-            self?.connectionStatus = .failed(error.localizedDescription)
-            print("❌ Wallet error: \(error.localizedDescription)")
         }
     }
     
@@ -150,6 +149,7 @@ class WalletManager: ObservableObject {
                            case .success(let jsonString) = firstResult {
                             print("✅ Transaction sent: \(jsonString.description)")
                             self?.checkBalance()
+                            NotificationCenter.default.post(name: .transactionSent, object: nil)
                         }
                     case .failure(let error):
                         self?.handleError(error)
@@ -158,6 +158,38 @@ class WalletManager: ObservableObject {
             }
         } catch {
             handleError(error)
+        }
+    }
+    
+    // MARK: - Private Methods
+    private func checkWalletAvailability() {
+        let isAvailable = CoinbaseWalletSDK.isCoinbaseWalletInstalled()
+        print("📱 Coinbase Wallet available: \(isAvailable)")
+    }
+    
+    private func handleWalletConnection(addressString: String) {
+        if let data = addressString.data(using: .utf8),
+           let addresses = try? JSONDecoder().decode([String].self, from: data),
+           let firstAddress = addresses.first {
+            DispatchQueue.main.async { [weak self] in
+                self?.isConnected = true
+                self?.walletAddress = firstAddress
+                self?.connectionStatus = .connected
+                print("✅ Wallet connected: \(firstAddress)")
+                self?.checkBalance()
+                NotificationCenter.default.post(name: .walletConnected, object: nil)
+            }
+        } else {
+            handleError(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse wallet address"]))
+        }
+    }
+    
+    private func handleError(_ error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isLoading = false
+            self?.error = error.localizedDescription
+            self?.connectionStatus = .failed(error.localizedDescription)
+            print("❌ Wallet error: \(error.localizedDescription)")
         }
     }
     
@@ -243,6 +275,19 @@ class WalletManager: ObservableObject {
         let start = address.prefix(6)
         let end = address.suffix(4)
         return "\(start)...\(end)"
+    }
+}
+
+// MARK: - WalletManager Connection Request Extension
+extension WalletManager {
+    func createConnectRequest() -> WalletConnectRequest {
+        return WalletConnectRequest(
+            chainId: "0x1", // Ethereum Mainnet
+            methods: ["eth_requestAccounts", "eth_signTransaction"],
+            appName: "GoBased",
+            appLogoUrl: "https://your-app-logo-url.com/logo.png", // Replace with your logo
+            description: "Connect to explore quests and collect NFTs"
+        )
     }
 }
 
