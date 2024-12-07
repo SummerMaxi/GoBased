@@ -47,9 +47,9 @@ struct ARContainerView: View {
                 
                 Spacer()
                 
-                // Bottom Control Bar
+                // Bottom Control Bar with all icons
                 HStack(spacing: 25) {
-                    // Debug Info Toggle
+                    // Debug Info Button
                     Button(action: { showDebugInfo.toggle() }) {
                         Image(systemName: showDebugInfo ? "info.circle.fill" : "info.circle")
                             .font(.title2)
@@ -61,8 +61,39 @@ struct ARContainerView: View {
                     
                     // Camera Button
                     Button(action: {
-                        if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
-                            coordinator.captureSelfie()
+                        if let lastCapture = lastCaptureDate,
+                           Date().timeIntervalSince(lastCapture) < 2.0 {
+                            return // Prevent rapid captures
+                        }
+                        
+                        // Request photo permission and take photo
+                        PHPhotoLibrary.requestAuthorization { status in
+                            DispatchQueue.main.async {
+                                if status == .authorized {
+                                    if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
+                                        coordinator.captureSelfie()
+                                        lastCaptureDate = Date()
+                                        
+                                        // Show flash effect
+                                        withAnimation {
+                                            showCameraAlert = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                                showCameraAlert = false
+                                            }
+                                        }
+                                        
+                                        // Show success message
+                                        withAnimation {
+                                            showPhotoSavedAlert = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                                showPhotoSavedAlert = false
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    errorMessage = "Please enable photo library access in Settings"
+                                }
+                            }
                         }
                     }) {
                         Image(systemName: "camera.circle.fill")
@@ -92,7 +123,7 @@ struct ARContainerView: View {
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(25)
-                .padding(.bottom, 90) // Increased to account for TabView
+                .padding(.bottom, 90) // Adjusted to be above tab bar
                 .padding(.horizontal)
             }
             
@@ -106,71 +137,39 @@ struct ARContainerView: View {
             
             // Success Message Overlay
             if showPhotoSavedAlert {
-                Text("Photo saved!")
-                    .padding()
-                    .background(Color.green.opacity(0.8))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    .transition(.move(edge: .top))
-                    .position(x: UIScreen.main.bounds.width/2, y: 100)
+                VStack {
+                    Text("Photo saved!")
+                        .padding()
+                        .background(Color.green.opacity(0.8))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                        .transition(.move(edge: .top))
+                }
+                .position(x: UIScreen.main.bounds.width/2, y: 100)
+                .transition(.move(edge: .top))
             }
             
             // Error Message Overlay
             if let error = errorMessage {
-                Text(error)
-                    .padding()
-                    .background(Color.red.opacity(0.8))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    .transition(.move(edge: .top))
-                    .position(x: UIScreen.main.bounds.width/2, y: 100)
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            errorMessage = nil
-                        }
+                VStack {
+                    Text(error)
+                        .padding()
+                        .background(Color.red.opacity(0.8))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .position(x: UIScreen.main.bounds.width/2, y: 100)
+                .transition(.move(edge: .top))
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        errorMessage = nil
                     }
+                }
             }
         }
         .onAppear {
+            // Request camera permission when view appears
             AVCaptureDevice.requestAccess(for: .video) { _ in }
-        }
-    }
-    
-    private func takeSelfie() {
-        // Check cooldown
-        if let lastCapture = lastCaptureDate,
-           Date().timeIntervalSince(lastCapture) < 2.0 {
-            return
-        }
-        
-        // Request photo permission and take photo
-        PHPhotoLibrary.requestAuthorization { status in
-            DispatchQueue.main.async {
-                if status == .authorized {
-                    if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
-                        coordinator.captureSelfie()
-                        lastCaptureDate = Date()
-                        
-                        // Show flash effect
-                        withAnimation {
-                            showCameraAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                showCameraAlert = false
-                            }
-                        }
-                        
-                        // Show success message
-                        withAnimation {
-                            showPhotoSavedAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                showPhotoSavedAlert = false
-                            }
-                        }
-                    }
-                } else {
-                    errorMessage = "Please enable photo library access in Settings"
-                }
-            }
         }
     }
 }

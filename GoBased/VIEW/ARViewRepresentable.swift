@@ -117,20 +117,29 @@ struct ARViewRepresentable: UIViewRepresentable {
         func captureSelfie() {
             guard let arView = arView else { return }
             
-            // Create and save snapshot
-            arView.snapshot(saveToHDR: false) { snapshotImage in
-                if let image = snapshotImage {
-                    UIImageWriteToSavedPhotosAlbum(image, self, #selector(self.image(_:didFinishSavingWithError:contextInfo:)), nil)
-                }
+            // Ensure we're on main thread for UI operations
+            DispatchQueue.main.async {
+                // Take screenshot of the entire AR view (includes both camera and 3D content)
+                let screenshot = arView.snapshot(saveToHDR: false, completion: { image in
+                    if let finalImage = image {
+                        // Save the image to photo library
+                        UIImageWriteToSavedPhotosAlbum(finalImage, self, #selector(self.image(_:didFinishSavingWithError:contextInfo:)), nil)
+                    }
+                })
             }
         }
 
         @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
             if let error = error {
                 print("Error saving photo: \(error.localizedDescription)")
-            } else {
+                // Notify user of error if needed
                 DispatchQueue.main.async {
-                    print("Photo saved successfully!")
+                    // You can implement error notification here
+                }
+            } else {
+                print("Photo saved successfully!")
+                DispatchQueue.main.async {
+                    // You can implement success notification here
                 }
             }
         }
