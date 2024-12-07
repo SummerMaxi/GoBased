@@ -44,18 +44,23 @@ struct ARViewRepresentable: UIViewRepresentable {
                 let rotationDuration: TimeInterval = 12.0 // Increased duration for slower rotation
                 
                 // Start continuous rotation using Timer with smaller increments
-                Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { _ in // ~30fps for smoother motion
+                Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak modelEntity] timer in
+                    guard let entity = modelEntity else {
+                        timer.invalidate()
+                        return
+                    }
+                    
                     let rotationAngle = Float(Date().timeIntervalSince1970).remainder(dividingBy: Float(rotationDuration)) * (2 * .pi / Float(rotationDuration))
                     
                     // Smooth rotation transition
-                    let currentRotation = modelEntity.orientation
+                    let currentRotation = entity.orientation
                     let targetRotation = simd_quatf(angle: rotationAngle, axis: [0, 1, 0])
                     
                     // Interpolate between current and target rotation
                     let smoothFactor: Float = 0.05 // Lower value = smoother transition
                     let smoothedRotation = simd_slerp(currentRotation, targetRotation, smoothFactor)
                     
-                    modelEntity.orientation = smoothedRotation
+                    entity.orientation = smoothedRotation
                 }
                 
                 anchor.addChild(modelEntity)
@@ -64,17 +69,37 @@ struct ARViewRepresentable: UIViewRepresentable {
             
             arView.scene.addAnchor(anchor)
         }
-
+        
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let arView = arView else { return }
             
             let location = gesture.location(in: arView)
             
             if let hitEntity = arView.entity(at: location) {
-                for (_, logoEntity) in logoEntities {
+                for (id, logoEntity) in logoEntities {
                     if hitEntity == logoEntity || hitEntity.isDescendant(of: logoEntity) {
                         if let urlString = logoEntity.getValue(forKey: "mintingURL") as? String,
                            let url = URL(string: urlString) {
+                            
+                            // Animate the logo disappearing
+                            var transform = logoEntity.transform
+                            transform.scale = .zero
+                            
+                            // Create disappearing animation
+                            logoEntity.move(to: transform, relativeTo: logoEntity.parent, duration: 0.5)
+                            
+                            // Remove the entity after animation
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                                logoEntity.removeFromParent()
+                                self?.logoEntities.removeValue(forKey: id)
+                                
+                                // Update the collected count
+                                DispatchQueue.main.async {
+                                    self?.parent.arExperience.incrementCollected()
+                                }
+                            }
+                            
+                            // Open the URL
                             DispatchQueue.main.async {
                                 let safariVC = SFSafariViewController(url: url)
                                 UIApplication.shared.windows.first?.rootViewController?.present(safariVC, animated: true)

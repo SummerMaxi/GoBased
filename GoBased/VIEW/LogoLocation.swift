@@ -5,12 +5,19 @@ struct LogoLocation: Identifiable {
     let position: SIMD3<Float>
     let url: String
     
-    static let predefinedLocations: [LogoLocation] = generateRandomLocations(count: 10)
+    static let predefinedLocations: [LogoLocation] = generateRandomLocations(count: 15)
     
     static func generateRandomLocations(count: Int) -> [LogoLocation] {
         var locations: [LogoLocation] = []
         
-        for i in 0..<count {
+        // Define the list of URLs
+        let urls = [
+            "https://portal.cdp.coinbase.com/quest",
+            "https://www.basefairy.xyz/",
+            "https://www.base.org/names"
+        ]
+        
+        for _ in 0..<count {
             // Generate random angles and distance
             let angle = Float.random(in: 0...(2 * .pi))
             let distance = Float.random(in: 8...80)     // Increased distance range
@@ -22,9 +29,12 @@ struct LogoLocation: Identifiable {
             
             let position = SIMD3<Float>(x, height, z)
             
+            // Randomly select a URL from the list
+            let randomURL = urls.randomElement() ?? urls[0]
+            
             locations.append(LogoLocation(
                 position: position,
-                url: "https://www.basefairy.xyz/\(i + 1)"
+                url: randomURL
             ))
         }
         

@@ -11,6 +11,13 @@ struct ARContainerView: View {
                 .ignoresSafeArea()
             
             VStack {
+                Text("Collected: \(arExperience.collectedCount)/\(arExperience.totalLogos)")
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                    .padding(.top, 44)
+                
                 if showDebugInfo {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Logo Positions:")
@@ -25,15 +32,10 @@ struct ARContainerView: View {
                     .background(Color.black.opacity(0.7))
                     .foregroundColor(.white)
                     .cornerRadius(10)
-                } else {
-                    Text("Find and tap on logos to mint NFTs")
-                        .padding()
-                        .background(Color.black.opacity(0.7))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
                 }
+                
+                Spacer()
             }
-            .padding(.top, 44)
             
             Button(action: { showDebugInfo.toggle() }) {
                 Image(systemName: showDebugInfo ? "info.circle.fill" : "info.circle")
