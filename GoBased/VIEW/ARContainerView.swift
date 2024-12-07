@@ -61,49 +61,18 @@ struct ARContainerView: View {
                     
                     // Camera Button
                     Button(action: {
-                        // Check cooldown
-                        if let lastCapture = lastCaptureDate,
-                           Date().timeIntervalSince(lastCapture) < 2.0 {
-                            return
-                        }
-                        
-                        // Request photo permission and take photo
-                        PHPhotoLibrary.requestAuthorization { status in
-                            DispatchQueue.main.async {
-                                if status == .authorized {
-                                    if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
-                                        coordinator.captureSelfie()
-                                        lastCaptureDate = Date()
-                                        
-                                        // Show flash effect
-                                        withAnimation {
-                                            showCameraAlert = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                                showCameraAlert = false
-                                            }
-                                        }
-                                        
-                                        // Show success message
-                                        withAnimation {
-                                            showPhotoSavedAlert = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                                showPhotoSavedAlert = false
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    errorMessage = "Please enable photo library access in Settings"
-                                }
-                            }
+                        if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
+                            coordinator.captureSelfie()
                         }
                     }) {
-                        Image(systemName: "camera")
+                        Image(systemName: "camera.circle.fill")
                             .font(.title2)
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
                             .background(Color.black.opacity(0.7))
                             .clipShape(Circle())
                     }
+                    .buttonStyle(PlainButtonStyle()) // Prevents tab navigation
                     
                     // Wallet Button
                     Button(action: {
@@ -123,7 +92,7 @@ struct ARContainerView: View {
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(25)
-                .padding(.bottom, 20)
+                .padding(.bottom, 90) // Increased to account for TabView
                 .padding(.horizontal)
             }
             
@@ -163,8 +132,45 @@ struct ARContainerView: View {
             }
         }
         .onAppear {
-            // Request camera permission when view appears
             AVCaptureDevice.requestAccess(for: .video) { _ in }
+        }
+    }
+    
+    private func takeSelfie() {
+        // Check cooldown
+        if let lastCapture = lastCaptureDate,
+           Date().timeIntervalSince(lastCapture) < 2.0 {
+            return
+        }
+        
+        // Request photo permission and take photo
+        PHPhotoLibrary.requestAuthorization { status in
+            DispatchQueue.main.async {
+                if status == .authorized {
+                    if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
+                        coordinator.captureSelfie()
+                        lastCaptureDate = Date()
+                        
+                        // Show flash effect
+                        withAnimation {
+                            showCameraAlert = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                showCameraAlert = false
+                            }
+                        }
+                        
+                        // Show success message
+                        withAnimation {
+                            showPhotoSavedAlert = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                showPhotoSavedAlert = false
+                            }
+                        }
+                    }
+                } else {
+                    errorMessage = "Please enable photo library access in Settings"
+                }
+            }
         }
     }
 }
