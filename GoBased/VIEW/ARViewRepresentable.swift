@@ -1,110 +1,92 @@
 import SwiftUI
 import ARKit
 import RealityKit
-import CoreLocation
+import SafariServices
 
 struct ARViewRepresentable: UIViewRepresentable {
     @EnvironmentObject var arExperience: ARExperienceManager
-    @EnvironmentObject var locationManager: LocationManager
     
     class Coordinator: NSObject, ARSessionDelegate {
         var parent: ARViewRepresentable
         var arView: ARView?
-        var logoAnchors: [UUID: AnchorEntity] = [:]
-        var debugMarkers: [UUID: [Entity]] = [:]
+        var logoEntities: [UUID: Entity] = [:]
         
         init(_ parent: ARViewRepresentable) {
             self.parent = parent
             super.init()
         }
         
-        func session(_ session: ARSession, didFailWithError error: Error) {
-            print("❌ AR Session failed: \(error)")
-        }
-        
-        func sessionWasInterrupted(_ session: ARSession) {
-            print("⚠️ AR Session was interrupted")
-        }
-        
-        func sessionInterruptionEnded(_ session: ARSession) {
-            print("✅ AR Session interruption ended")
-            
-            // Reload logos when session resumes
-            if let userLocation = parent.locationManager.location,
-               let arView = self.arView {
-                parent.placeLogos(in: arView, userLocation: userLocation, coordinator: self)
-            }
-        }
-        
-        @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
+        func setupARView() {
             guard let arView = arView else { return }
             
-            // Get tap location
-            let location = recognizer.location(in: arView)
+            // Add tap gesture
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+            arView.addGestureRecognizer(tapGesture)
             
-            // Perform hit test
-            let results = arView.raycast(from: location, allowing: .estimatedPlane, alignment: .horizontal)
-            
-            if let firstResult = results.first {
-                // Add a debug sphere at tap location
-                let sphere = ModelEntity(mesh: .generateSphere(radius: 0.1),
-                                      materials: [SimpleMaterial(color: .yellow, isMetallic: false)])
-                
-                let anchor = AnchorEntity(world: firstResult.worldTransform)
-                anchor.addChild(sphere)
-                arView.scene.addAnchor(anchor)
-                
-                print("🎯 Tapped at world position: \(firstResult.worldTransform.columns.3)")
-            }
-        }
-        
-        func updateLogoPositions(userLocation: CLLocation) {
+            // Place logos in predefined positions
             for location in LogoLocation.predefinedLocations {
-                let logoLocation = CLLocation(
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude
-                )
-                
-                let arPosition = parent.translateGPSToARPosition(
-                    userLocation: userLocation,
-                    logoLocation: logoLocation
-                )
-                
-                if let anchor = logoAnchors[location.id] {
-                    anchor.position = arPosition
-                    updateDebugMarkers(for: location.id, at: arPosition)
-                }
+                placeLogo(at: location)
             }
         }
         
-        func updateDebugMarkers(for id: UUID, at position: SIMD3<Float>) {
-            debugMarkers[id]?.forEach { $0.removeFromParent() }
-            debugMarkers[id]?.removeAll()
-            
+        func placeLogo(at location: LogoLocation) {
             guard let arView = arView else { return }
-            var markers: [Entity] = []
             
-            // Add sphere at logo position
-            let sphereMesh = MeshResource.generateSphere(radius: 0.2)
-            let sphereMaterial = SimpleMaterial(color: .red, isMetallic: false)
-            let sphereEntity = ModelEntity(mesh: sphereMesh, materials: [sphereMaterial])
-            sphereEntity.position = position
+            // Create anchor at the specified position
+            let anchor = AnchorEntity()
             
-            // Add vertical pole
-            let poleHeight = position.y
-            let poleMesh = MeshResource.generateCylinder(height: poleHeight, radius: 0.02)
-            let poleMaterial = SimpleMaterial(color: .blue, isMetallic: false)
-            let poleEntity = ModelEntity(mesh: poleMesh, materials: [poleMaterial])
-            poleEntity.position = SIMD3<Float>(position.x, poleHeight/2, position.z)
-            
-            let anchor = AnchorEntity(world: .zero)
-            anchor.addChild(sphereEntity)
-            anchor.addChild(poleEntity)
+            if let modelEntity = try? ModelEntity.load(named: "baselogo.usdz") {
+                modelEntity.position = location.position
+                modelEntity.scale = SIMD3<Float>(repeating: 0.3) // Adjust size as needed
+                modelEntity.generateCollisionShapes(recursive: true)
+                modelEntity.setValue(location.url, forKey: "mintingURL")
+                
+                // Add continuous rotation
+                let rotationAngle = Float.pi * 2
+                let duration: TimeInterval = 8.0 // 8 seconds per rotation
+                
+                // Create and start continuous rotation animation
+                modelEntity.transform.rotation = simd_quatf(angle: 0, axis: [0, 1, 0])
+                
+                // Using AsyncStream for continuous rotation
+                Task {
+                    while true {
+                        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+                        DispatchQueue.main.async {
+                            modelEntity.transform.rotation = simd_quatf(
+                                angle: rotationAngle,
+                                axis: [0, 1, 0]
+                            )
+                        }
+                    }
+                }
+                
+                anchor.addChild(modelEntity)
+                logoEntities[location.id] = modelEntity
+            }
             
             arView.scene.addAnchor(anchor)
-            markers.append(anchor)
+        }
+        
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let arView = arView else { return }
             
-            debugMarkers[id] = markers
+            let location = gesture.location(in: arView)
+            
+            if let hitEntity = arView.entity(at: location) {
+                for (_, logoEntity) in logoEntities {
+                    if hitEntity == logoEntity || hitEntity.isDescendant(of: logoEntity) {
+                        if let urlString = logoEntity.getValue(forKey: "mintingURL") as? String,
+                           let url = URL(string: urlString) {
+                            DispatchQueue.main.async {
+                                let safariVC = SFSafariViewController(url: url)
+                                UIApplication.shared.windows.first?.rootViewController?.present(safariVC, animated: true)
+                            }
+                        }
+                        break
+                    }
+                }
+            }
         }
     }
     
@@ -116,117 +98,40 @@ struct ARViewRepresentable: UIViewRepresentable {
         let arView = ARView(frame: .zero)
         context.coordinator.arView = arView
         
-        // Configure AR session
         let config = ARWorldTrackingConfiguration()
         config.planeDetection = [.horizontal]
-        config.worldAlignment = .gravityAndHeading // Use true north
         
-        // Add coaching overlay
-        let coachingOverlay = ARCoachingOverlayView()
-        coachingOverlay.session = arView.session
-        coachingOverlay.goal = .tracking
-        coachingOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        arView.addSubview(coachingOverlay)
-        
-        // Run session with error handling
-        arView.session.delegate = context.coordinator
-        do {
-            try arView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
-            print("✅ AR session started successfully")
-        } catch {
-            print("❌ Failed to start AR session: \(error)")
-        }
-        
-        // Add tap gesture for debug purposes
-        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap))
-        arView.addGestureRecognizer(tapGesture)
-        
-        if let userLocation = locationManager.location {
-            placeLogos(in: arView, userLocation: userLocation, coordinator: context.coordinator)
-            print("📍 Initial user location: \(userLocation.coordinate)")
-        } else {
-            print("⚠️ No initial user location available")
-        }
+        arView.session.run(config)
+        context.coordinator.setupARView()
         
         return arView
     }
     
-    func updateUIView(_ uiView: ARView, context: Context) {
-        if let userLocation = locationManager.location {
-            context.coordinator.updateLogoPositions(userLocation: userLocation)
-        }
-    }
-    
-    private func placeLogos(in arView: ARView, userLocation: CLLocation, coordinator: Coordinator) {
-        print("Current user location: \(userLocation.coordinate)")
-        
-        for location in LogoLocation.predefinedLocations {
-            guard let modelEntity = try? ModelEntity.load(named: "baselogo.usdz") else {
-                print("❌ Failed to load baselogo.usdz model")
-                continue
+    func updateUIView(_ uiView: ARView, context: Context) {}
+}
+
+extension Entity {
+    func isDescendant(of entity: Entity) -> Bool {
+        var current = self.parent
+        while let parent = current {
+            if parent == entity {
+                return true
             }
-            
-            let logoLocation = CLLocation(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude
-            )
-            
-            let distance = userLocation.distance(from: logoLocation)
-            print("📍 Logo at \(logoLocation.coordinate) is \(Int(distance))m away")
-            
-            let arPosition = translateGPSToARPosition(
-                userLocation: userLocation,
-                logoLocation: logoLocation
-            )
-            
-            let targetHeight: Float = 3.0
-            let bounds = modelEntity.visualBounds(relativeTo: nil)
-            let currentHeight = bounds.max.y - bounds.min.y
-            let scale = targetHeight / currentHeight
-            modelEntity.scale = SIMD3<Float>(repeating: scale)
-            
-            modelEntity.generateCollisionShapes(recursive: true)
-            
-            let anchor = AnchorEntity()
-            anchor.position = arPosition
-            anchor.addChild(modelEntity)
-            arView.scene.addAnchor(anchor)
-            
-            coordinator.logoAnchors[location.id] = anchor
-            coordinator.updateDebugMarkers(for: location.id, at: arPosition)
-            
-            print("🎯 Placed logo at AR Position: x: \(arPosition.x), y: \(arPosition.y), z: \(arPosition.z)")
+            current = parent.parent
         }
+        return false
     }
     
-    private func translateGPSToARPosition(userLocation: CLLocation, logoLocation: CLLocation) -> SIMD3<Float> {
-        let distance = Float(userLocation.distance(from: logoLocation))
-        let bearing = getBearing(from: userLocation, to: logoLocation)
-        
-        print("📊 Distance: \(distance)m, Bearing: \(bearing) radians")
-        
-        let x = distance * sin(bearing)
-        let z = -distance * cos(bearing)
-        
-        // Adjust height based on distance
-        let y: Float = 1.6 // Eye level
-        
-        let position = SIMD3<Float>(x, y, z)
-        print("🌍 Translated to AR position: \(position)")
-        return position
+    private static var propertyKey: UInt8 = 0
+    
+    func setValue(_ value: Any?, forKey key: String) {
+        var dictionary = objc_getAssociatedObject(self, &Entity.propertyKey) as? [String: Any] ?? [:]
+        dictionary[key] = value
+        objc_setAssociatedObject(self, &Entity.propertyKey, dictionary, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
     
-    private func getBearing(from: CLLocation, to: CLLocation) -> Float {
-        let lat1 = Float(from.coordinate.latitude * .pi / 180)
-        let lon1 = Float(from.coordinate.longitude * .pi / 180)
-        let lat2 = Float(to.coordinate.latitude * .pi / 180)
-        let lon2 = Float(to.coordinate.longitude * .pi / 180)
-        
-        let dLon = lon2 - lon1
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let bearing = atan2(y, x)
-        
-        return bearing
+    func getValue(forKey key: String) -> Any? {
+        let dictionary = objc_getAssociatedObject(self, &Entity.propertyKey) as? [String: Any]
+        return dictionary?[key]
     }
 }

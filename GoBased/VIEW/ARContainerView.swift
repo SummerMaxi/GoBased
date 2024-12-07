@@ -1,52 +1,39 @@
 import SwiftUI
-import CoreLocation
 
 struct ARContainerView: View {
     @StateObject private var arExperience = ARExperienceManager()
-    @EnvironmentObject var locationManager: LocationManager
-    @State private var showDebugInfo = true
+    @State private var showDebugInfo = false
     
     var body: some View {
         ZStack {
             ARViewRepresentable()
                 .environmentObject(arExperience)
-                .environmentObject(locationManager)
+                .ignoresSafeArea()
             
-            if showDebugInfo {
-                VStack {
-                    if let userLocation = locationManager.location {
-                        Text("📱 Your Location:")
-                            .font(.caption)
-                        Text("Lat: \(String(format: "%.6f", userLocation.coordinate.latitude))")
-                            .font(.system(.caption, design: .monospaced))
-                        Text("Lon: \(String(format: "%.6f", userLocation.coordinate.longitude))")
-                            .font(.system(.caption, design: .monospaced))
-                        Text("Accuracy: \(String(format: "%.1f", userLocation.horizontalAccuracy))m")
-                            .font(.system(.caption, design: .monospaced))
+            VStack {
+                if showDebugInfo {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Logo Positions:")
+                            .font(.headline)
                         
-                        Divider()
-                        
-                        Text("🎯 Nearby Logos:")
-                            .font(.caption)
-                        ForEach(LogoLocation.predefinedLocations) { location in
-                            let distance = userLocation.distance(from: CLLocation(
-                                latitude: location.coordinate.latitude,
-                                longitude: location.coordinate.longitude
-                            ))
-                            Text("\(Int(distance))m away")
-                                .font(.system(.caption, design: .monospaced))
+                        ForEach(LogoLocation.predefinedLocations) { logo in
+                            Text(logo.debugDescription())
+                                .font(.caption)
                         }
-                    } else {
-                        Text("Waiting for location...")
                     }
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                } else {
+                    Text("Find and tap on logos to mint NFTs")
+                        .padding()
+                        .background(Color.black.opacity(0.7))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                 }
-                .padding()
-                .background(Color.black.opacity(0.7))
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .padding(.top, 44)
             
             Button(action: { showDebugInfo.toggle() }) {
                 Image(systemName: showDebugInfo ? "info.circle.fill" : "info.circle")
@@ -59,6 +46,5 @@ struct ARContainerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding()
         }
-        .ignoresSafeArea()
     }
 }
