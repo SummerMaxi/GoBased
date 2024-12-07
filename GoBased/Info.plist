@@ -11,6 +11,12 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>cbwallet</string>
+	</array>
+	<key>URL Types</key>
+	<string>gobased</string>
 	<key>We need camera access for AR features</key>
 	<string></string>
 </dict>

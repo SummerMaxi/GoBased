@@ -2,14 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
-    @StateObject private var walletManager = WalletManager() // Create WalletManager instance
+    @EnvironmentObject var walletManager: WalletManager
     
     var body: some View {
         TabView {
             ARContainerView()
                 .environmentObject(locationManager)
-                .environmentObject(walletManager) // Inject WalletManager
-                .ignoresSafeArea()
+                .environmentObject(walletManager)
                 .tabItem {
                     Label("AR", systemImage: "camera")
                 }
