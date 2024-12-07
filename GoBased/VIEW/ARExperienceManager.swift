@@ -1,20 +1,19 @@
-//
-//  ARExperienceManager.swift
-//  GoBased
-//
-//  Created by NAVEEN on 07/12/24.
-//
-
-
 import Foundation
 import CoreLocation
 import Combine
 
-final class ARExperienceManager: ObservableObject {
+class ARExperienceManager: ObservableObject {
     @Published var isReady = false
-    @Published var logoLocation: CLLocation?
+    @Published var nearestLogoDistance: Double?
+    @Published var visibleLogos: [LogoLocation] = []
     
-    init() {
-        isReady = true
+    func updateNearestLogoDistance(userLocation: CLLocation) {
+        let distances = LogoLocation.predefinedLocations.map { location in
+            userLocation.distance(from: CLLocation(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude
+            ))
+        }
+        nearestLogoDistance = distances.min()
     }
 }
