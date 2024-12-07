@@ -4,7 +4,6 @@ import CoinbaseWalletSDK
 struct WalletConnectSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var walletManager: WalletManager
-    @State private var isConnecting = false
     @State private var showQRScanner = false
     @State private var showError = false
     @State private var errorMessage: String?
@@ -31,16 +30,36 @@ struct WalletConnectSheet: View {
                     }
                     .padding(.vertical)
                     
+                    // Connection Status
+                    if walletManager.isLoading {
+                        VStack(spacing: 8) {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                            Text("Connecting to wallet...")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                    }
+                    
                     // Wallet Options Section
                     VStack(spacing: 16) {
                         // Coinbase Wallet Button
-                        Button(action: connectWallet) {
+                        Button(action: {
+                            walletManager.connectWalletInApp()
+                        }) {
                             HStack {
-                                Image(systemName: "link.circle.fill")
-                                    .font(.title3)
-                                Text("Connect Wallet")
+                                Image("coinbase-wallet-logo") // Add this image to your assets
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 24, height: 24)
+                                    .cornerRadius(12)
+                                
+                                Text("Coinbase Wallet")
+                                    .font(.headline)
+                                
                                 Spacer()
-                                if isConnecting {
+                                
+                                if walletManager.isLoading {
                                     ProgressView()
                                 } else {
                                     Image(systemName: "chevron.right")
@@ -52,8 +71,9 @@ struct WalletConnectSheet: View {
                             .background(Color.blue.opacity(0.1))
                             .cornerRadius(12)
                         }
-                        .disabled(isConnecting)
+                        .disabled(walletManager.isLoading)
                     }
+                    .padding(.horizontal)
                     
                     // Information Section
                     VStack(alignment: .leading, spacing: 16) {
@@ -80,10 +100,15 @@ struct WalletConnectSheet: View {
                     dismiss()
                 }
             )
-            .alert("Error", isPresented: $showError) {
+            .alert("Connection Error", isPresented: $walletManager.showError) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text(errorMessage ?? "An unknown error occurred")
+                Text(walletManager.error ?? "An unknown error occurred")
+            }
+        }
+        .onChange(of: walletManager.isConnected) { connected in
+            if connected {
+                dismiss()
             }
         }
     }
@@ -96,25 +121,82 @@ struct WalletConnectSheet: View {
             
             Text(text)
                 .font(.subheadline)
+            
+            Spacer()
         }
-    }
-    
-    private func connectWallet() {
-        isConnecting = true
-        walletManager.connectWalletInApp()
-    }
-    
-    private func showError(message: String) {
-        errorMessage = message
-        showError = true
     }
 }
 
+// MARK: - QR Scanner Sheet
+struct QRScannerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    var handleScan: (String) -> Void
+    
+    var body: some View {
+        NavigationView {
+            QRScannerView(handleScan: { code in
+                handleScan(code)
+                dismiss()
+            })
+            .navigationBarItems(
+                trailing: Button("Cancel") {
+                    dismiss()
+                }
+            )
+            .navigationTitle("Scan QR Code")
+        }
+    }
+}
+
+// MARK: - Custom Modifiers
+struct WalletButtonStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+    }
+}
+
+extension View {
+    func walletButtonStyle() -> some View {
+        modifier(WalletButtonStyle())
+    }
+}
+
+// MARK: - Preview Provider
 #if DEBUG
 struct WalletConnectSheet_Previews: PreviewProvider {
     static var previews: some View {
-        WalletConnectSheet()
-            .environmentObject(WalletManager())
+        Group {
+            // Normal state
+            WalletConnectSheet()
+                .environmentObject(WalletManager())
+            
+            // Loading state
+            WalletConnectSheet()
+                .environmentObject({
+                    let manager = WalletManager()
+                    manager.isLoading = true
+                    return manager
+                }())
+            
+            // Error state
+            WalletConnectSheet()
+                .environmentObject({
+                    let manager = WalletManager()
+                    manager.error = "Connection failed"
+                    manager.showError = true
+                    return manager
+                }())
+            
+            // Dark mode
+            WalletConnectSheet()
+                .environmentObject(WalletManager())
+                .preferredColorScheme(.dark)
+        }
     }
 }
 #endif

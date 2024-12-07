@@ -3,7 +3,7 @@ import CoinbaseWalletSDK
 
 @main
 struct GoBasedApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegateClass.self) var appDelegate
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var walletManager = WalletManager()
     
     var body: some Scene {

@@ -2,28 +2,75 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>geobased</string>
-			</array>
-		</dict>
-	</array>
-	<key>Identifier</key>
-	<string>com.Charnockite.GoBased</string>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>cbwallet</string>
-	</array>
-	<key>LSApplicationQueriesSchemes:</key>
-	<string>cbwallet</string>
-	<key>URL Schemes:</key>
-	<string>gobased</string>
-	<key>URL Types</key>
-	<string>gobased</string>
-	<key>We need camera access for AR features</key>
-	<string></string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>com.charnockite.gobased</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.charnockite.gobased</string>
+                <string>gobased</string>
+            </array>
+        </dict>
+    </array>
+    <key>CFBundleIdentifier</key>
+    <string>com.charnockite.gobased</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>cbwallet</string>
+    </array>
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+    
+    <!-- Camera Permissions -->
+    <key>NSCameraUsageDescription</key>
+    <string>We need camera access for AR features and taking selfies</string>
+    
+    <!-- Photo Library Permissions -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>We need photo library access to save your AR captures and selfies</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>We need access to save photos to your library</string>
+    
+    <!-- Location Permission -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>We need your location to show nearby AR experiences</string>
+    
+    <!-- Additional Required Capabilities -->
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>armv7</string>
+        <string>arkit</string>
+    </array>
+    
+    <!-- Camera Configuration -->
+    <key>UICameraUsageDescription</key>
+    <string>We need camera access for AR features and capturing photos</string>
+    
+    <!-- Microphone Permission (if needed) -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>We need microphone access for video capturing</string>
+    
+    <!-- Face ID Usage (if needed) -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>We use Face ID for secure authentication</string>
+    
+    <!-- Device Orientation Support -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
 </dict>
 </plist>

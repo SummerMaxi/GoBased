@@ -1,8 +1,6 @@
 import SwiftUI
 import ARKit
 import RealityKit
-import SafariServices
-import AVFoundation
 import Photos
 
 struct ARViewRepresentable: UIViewRepresentable {
@@ -12,6 +10,7 @@ struct ARViewRepresentable: UIViewRepresentable {
         var parent: ARViewRepresentable
         var arView: ARView?
         var logoEntities: [UUID: Entity] = [:]
+        private var frontCameraSession: AVCaptureSession?
         
         init(_ parent: ARViewRepresentable) {
             self.parent = parent
@@ -31,21 +30,42 @@ struct ARViewRepresentable: UIViewRepresentable {
             }
         }
         
-        func placeLogo(at location: LogoLocation) {
+        // MARK: - Camera Setup
+        private func setupFrontCamera() -> AVCaptureSession? {
+            let session = AVCaptureSession()
+            session.sessionPreset = .photo
+            
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
+                print("❌ Could not find front camera")
+                return nil
+            }
+            
+            do {
+                let input = try AVCaptureDeviceInput(device: device)
+                if session.canAddInput(input) {
+                    session.addInput(input)
+                    return session
+                }
+            } catch {
+                print("❌ Error setting up front camera: \(error)")
+            }
+            return nil
+        }
+        
+        // MARK: - Logo Placement
+        private func placeLogo(at location: LogoLocation) {
             guard let arView = arView else { return }
             
             let anchor = AnchorEntity()
             
             if let modelEntity = try? ModelEntity.load(named: "baselogo.usdz") {
                 modelEntity.position = location.position
-                modelEntity.scale = SIMD3<Float>(repeating: 0.15) // Reduced size to 0.15
+                modelEntity.scale = SIMD3<Float>(repeating: 0.15)
                 modelEntity.generateCollisionShapes(recursive: true)
                 modelEntity.setValue(location.url, forKey: "mintingURL")
                 
-                // Create slower, smoother rotation
-                let rotationDuration: TimeInterval = 12.0 // Increased duration for slower rotation
-                
-                // Start continuous rotation using Timer with smaller increments
+                // Create rotation animation
+                let rotationDuration: TimeInterval = 12.0
                 Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak modelEntity] timer in
                     guard let entity = modelEntity else {
                         timer.invalidate()
@@ -53,16 +73,10 @@ struct ARViewRepresentable: UIViewRepresentable {
                     }
                     
                     let rotationAngle = Float(Date().timeIntervalSince1970).remainder(dividingBy: Float(rotationDuration)) * (2 * .pi / Float(rotationDuration))
-                    
-                    // Smooth rotation transition
                     let currentRotation = entity.orientation
                     let targetRotation = simd_quatf(angle: rotationAngle, axis: [0, 1, 0])
-                    
-                    // Interpolate between current and target rotation
-                    let smoothFactor: Float = 0.05 // Lower value = smoother transition
-                    let smoothedRotation = simd_slerp(currentRotation, targetRotation, smoothFactor)
-                    
-                    entity.orientation = smoothedRotation
+                    let smoothFactor: Float = 0.05
+                    entity.orientation = simd_slerp(currentRotation, targetRotation, smoothFactor)
                 }
                 
                 anchor.addChild(modelEntity)
@@ -72,6 +86,7 @@ struct ARViewRepresentable: UIViewRepresentable {
             arView.scene.addAnchor(anchor)
         }
         
+        // MARK: - Tap Handling
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let arView = arView else { return }
             
@@ -83,25 +98,22 @@ struct ARViewRepresentable: UIViewRepresentable {
                         if let urlString = logoEntity.getValue(forKey: "mintingURL") as? String,
                            let url = URL(string: urlString) {
                             
-                            // Animate the logo disappearing
+                            // Animate logo disappearance
                             var transform = logoEntity.transform
                             transform.scale = .zero
-                            
-                            // Create disappearing animation
                             logoEntity.move(to: transform, relativeTo: logoEntity.parent, duration: 0.5)
                             
-                            // Remove the entity after animation
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                                 logoEntity.removeFromParent()
                                 self?.logoEntities.removeValue(forKey: id)
                                 
-                                // Update the collected count
+                                // Update collected count
                                 DispatchQueue.main.async {
                                     self?.parent.arExperience.incrementCollected()
                                 }
                             }
                             
-                            // Open the URL
+                            // Open URL
                             DispatchQueue.main.async {
                                 let safariVC = SFSafariViewController(url: url)
                                 UIApplication.shared.windows.first?.rootViewController?.present(safariVC, animated: true)
@@ -113,33 +125,45 @@ struct ARViewRepresentable: UIViewRepresentable {
             }
         }
         
-        // Selfie capture function
-        func captureSelfie() {
-            guard let arView = arView else { return }
-            
-            // Ensure we're on main thread for UI operations
-            DispatchQueue.main.async {
-                // Take screenshot of the entire AR view (includes both camera and 3D content)
-                let screenshot = arView.snapshot(saveToHDR: false, completion: { image in
-                    if let finalImage = image {
-                        // Save the image to photo library
-                        UIImageWriteToSavedPhotosAlbum(finalImage, self, #selector(self.image(_:didFinishSavingWithError:contextInfo:)), nil)
-                    }
-                })
+        // MARK: - Photo Capture
+        func captureSelfie(completion: @escaping (Bool) -> Void) {
+            guard let arView = arView else {
+                completion(false)
+                return
             }
-        }
-
-        @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
-            if let error = error {
-                print("Error saving photo: \(error.localizedDescription)")
-                // Notify user of error if needed
-                DispatchQueue.main.async {
-                    // You can implement error notification here
+            
+            PHPhotoLibrary.requestAuthorization { [weak self] status in
+                guard status == .authorized else {
+                    DispatchQueue.main.async {
+                        completion(false)
+                    }
+                    return
                 }
-            } else {
-                print("Photo saved successfully!")
+                
                 DispatchQueue.main.async {
-                    // You can implement success notification here
+                    UIGraphicsBeginImageContextWithOptions(arView.bounds.size, true, UIScreen.main.scale)
+                    arView.drawHierarchy(in: arView.bounds, afterScreenUpdates: true)
+                    
+                    if let image = UIGraphicsGetImageFromCurrentImageContext() {
+                        UIGraphicsEndImageContext()
+                        
+                        // Save to photo library
+                        PHPhotoLibrary.shared().performChanges({
+                            PHAssetChangeRequest.creationRequestForAsset(from: image)
+                        }) { success, error in
+                            DispatchQueue.main.async {
+                                if success {
+                                    print("✅ Photo saved successfully")
+                                    completion(true)
+                                } else {
+                                    print("❌ Failed to save photo: \(error?.localizedDescription ?? "Unknown error")")
+                                    completion(false)
+                                }
+                            }
+                        }
+                    } else {
+                        completion(false)
+                    }
                 }
             }
         }
@@ -156,37 +180,22 @@ struct ARViewRepresentable: UIViewRepresentable {
         let config = ARWorldTrackingConfiguration()
         config.planeDetection = [.horizontal]
         
+        // Enable auto focus
+        if let camera = arView.session.configuration?.videoFormat.captureDevice() {
+            try? camera.lockForConfiguration()
+            if camera.isFocusModeSupported(.continuousAutoFocus) {
+                camera.focusMode = .continuousAutoFocus
+            }
+            camera.unlockForConfiguration()
+        }
+        
+        arView.session.delegate = context.coordinator
         arView.session.run(config)
+        
         context.coordinator.setupARView()
         
         return arView
     }
     
     func updateUIView(_ uiView: ARView, context: Context) {}
-}
-
-extension Entity {
-    func isDescendant(of entity: Entity) -> Bool {
-        var current = self.parent
-        while let parent = current {
-            if parent == entity {
-                return true
-            }
-            current = parent.parent
-        }
-        return false
-    }
-    
-    private static var propertyKey: UInt8 = 0
-    
-    func setValue(_ value: Any?, forKey key: String) {
-        var dictionary = objc_getAssociatedObject(self, &Entity.propertyKey) as? [String: Any] ?? [:]
-        dictionary[key] = value
-        objc_setAssociatedObject(self, &Entity.propertyKey, dictionary, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-    }
-    
-    func getValue(forKey key: String) -> Any? {
-        let dictionary = objc_getAssociatedObject(self, &Entity.propertyKey) as? [String: Any]
-        return dictionary?[key]
-    }
 }

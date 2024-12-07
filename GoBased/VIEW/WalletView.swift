@@ -114,13 +114,16 @@ struct BalanceCard: View {
             Text("Balance")
                 .font(.headline)
             
-            if let balance = walletManager.balance {
+            if walletManager.isLoading {
+                ProgressView()
+            } else if let balance = walletManager.balance {
                 Text(walletManager.formatBalance(balance))
                     .font(.system(.title, design: .rounded))
                     .bold()
             } else {
-                Text("Loading...")
-                    .font(.title)
+                Text("0.00 ETH")
+                    .font(.system(.title, design: .rounded))
+                    .bold()
                     .foregroundColor(.secondary)
             }
         }
@@ -130,6 +133,7 @@ struct BalanceCard: View {
         .cornerRadius(16)
     }
 }
+
 
 struct ActionsCard: View {
     @EnvironmentObject var walletManager: WalletManager

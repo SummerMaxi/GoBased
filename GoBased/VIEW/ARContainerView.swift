@@ -1,16 +1,16 @@
 import SwiftUI
+import ARKit
 import RealityKit
 import Photos
-import AVFoundation
 
 struct ARContainerView: View {
     @StateObject private var arExperience = ARExperienceManager()
-    @State private var showDebugInfo = false
+    @EnvironmentObject var walletManager: WalletManager
     @State private var showCameraAlert = false
-    @State private var lastCaptureDate: Date? = nil
     @State private var showPhotoSavedAlert = false
     @State private var errorMessage: String? = nil
-    @EnvironmentObject var walletManager: WalletManager
+    @State private var isCapturingPhoto = false
+    @State private var isFrontCamera = false
     
     var body: some View {
         ZStack {
@@ -29,29 +29,15 @@ struct ARContainerView: View {
                     .cornerRadius(10)
                     .padding(.top, 44)
                 
-                // Debug Info Panel
-                if showDebugInfo {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Logo Positions:")
-                            .font(.headline)
-                        ForEach(LogoLocation.predefinedLocations) { logo in
-                            Text(logo.debugDescription())
-                                .font(.caption)
-                        }
-                    }
-                    .padding()
-                    .background(Color.black.opacity(0.7))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
-                
                 Spacer()
                 
-                // Bottom Control Bar with all icons
+                // Bottom Control Bar
                 HStack(spacing: 25) {
                     // Debug Info Button
-                    Button(action: { showDebugInfo.toggle() }) {
-                        Image(systemName: showDebugInfo ? "info.circle.fill" : "info.circle")
+                    Button(action: {
+                        arExperience.toggleDebugInfo()
+                    }) {
+                        Image(systemName: arExperience.showDebugInfo ? "info.circle.fill" : "info.circle")
                             .font(.title2)
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
@@ -61,57 +47,21 @@ struct ARContainerView: View {
                     
                     // Camera Button
                     Button(action: {
-                        if let lastCapture = lastCaptureDate,
-                           Date().timeIntervalSince(lastCapture) < 2.0 {
-                            return // Prevent rapid captures
-                        }
-                        
-                        // Request photo permission and take photo
-                        PHPhotoLibrary.requestAuthorization { status in
-                            DispatchQueue.main.async {
-                                if status == .authorized {
-                                    if let coordinator = (UIApplication.shared.windows.first?.rootViewController?.view as? ARView)?.session.delegate as? ARViewRepresentable.Coordinator {
-                                        coordinator.captureSelfie()
-                                        lastCaptureDate = Date()
-                                        
-                                        // Show flash effect
-                                        withAnimation {
-                                            showCameraAlert = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                                showCameraAlert = false
-                                            }
-                                        }
-                                        
-                                        // Show success message
-                                        withAnimation {
-                                            showPhotoSavedAlert = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                                showPhotoSavedAlert = false
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    errorMessage = "Please enable photo library access in Settings"
-                                }
-                            }
-                        }
+                        capturePhoto()
                     }) {
                         Image(systemName: "camera.circle.fill")
-                            .font(.title2)
+                            .font(.system(size: 44))
                             .foregroundColor(.white)
-                            .frame(width: 44, height: 44)
                             .background(Color.black.opacity(0.7))
                             .clipShape(Circle())
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .disabled(isCapturingPhoto)
                     
-                    // Wallet Button
+                    // Camera Switch Button
                     Button(action: {
-                        if !walletManager.isConnected {
-                            walletManager.connectWalletInApp()
-                        }
+                        toggleCamera()
                     }) {
-                        Image(systemName: walletManager.isConnected ? "wallet.pass.fill" : "wallet.pass")
+                        Image(systemName: "camera.rotate.fill")
                             .font(.title2)
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
@@ -123,11 +73,10 @@ struct ARContainerView: View {
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(25)
-                .padding(.bottom, 90)
-                .padding(.horizontal)
+                .padding(.bottom, 50)
             }
             
-            // Flash Effect Overlay
+            // Flash Effect
             if showCameraAlert {
                 Color.white
                     .opacity(0.3)
@@ -135,7 +84,7 @@ struct ARContainerView: View {
                     .transition(.opacity)
             }
             
-            // Success Message Overlay
+            // Photo Saved Alert
             if showPhotoSavedAlert {
                 VStack {
                     Text("Photo saved!")
@@ -143,13 +92,12 @@ struct ARContainerView: View {
                         .background(Color.green.opacity(0.8))
                         .foregroundColor(.white)
                         .cornerRadius(10)
-                        .transition(.move(edge: .top))
                 }
                 .position(x: UIScreen.main.bounds.width/2, y: 100)
                 .transition(.move(edge: .top))
             }
             
-            // Error Message Overlay
+            // Error Message
             if let error = errorMessage {
                 VStack {
                     Text(error)
@@ -168,12 +116,71 @@ struct ARContainerView: View {
             }
         }
         .onAppear {
-            // Request camera permission when view appears
-            AVCaptureDevice.requestAccess(for: .video) { _ in }
+            checkPermissions()
         }
+    }
+    
+    // MARK: - Helper Methods
+    private func checkPermissions() {
+        // Check camera permission
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            if !granted {
+                DispatchQueue.main.async {
+                    errorMessage = "Camera access is required for AR features"
+                }
+            }
+        }
+        
+        // Check photo library permission
+        PHPhotoLibrary.requestAuthorization { status in
+            if status != .authorized {
+                DispatchQueue.main.async {
+                    errorMessage = "Photo library access is required to save captures"
+                }
+            }
+        }
+    }
+    
+    private func capturePhoto() {
+        guard !isCapturingPhoto else { return }
+        
+        isCapturingPhoto = true
+        showCameraAlert = true
+        
+        // Simulate flash effect
+        withAnimation(.easeInOut(duration: 0.2)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                showCameraAlert = false
+                
+                // Capture photo using coordinator
+                if let arView = UIApplication.shared.windows.first?.rootViewController?.view as? ARView,
+                   let coordinator = arView.session.delegate as? ARViewRepresentable.Coordinator {
+                    coordinator.captureSelfie { success in
+                        DispatchQueue.main.async {
+                            isCapturingPhoto = false
+                            if success {
+                                showPhotoSavedAlert = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    showPhotoSavedAlert = false
+                                }
+                            } else {
+                                errorMessage = "Failed to save photo"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func toggleCamera() {
+        isFrontCamera.toggle()
+        // Implement camera switch logic here
+        // This will require additional implementation in ARViewRepresentable
     }
 }
 
+// MARK: - Preview Provider
 #if DEBUG
 struct ARContainerView_Previews: PreviewProvider {
     static var previews: some View {
