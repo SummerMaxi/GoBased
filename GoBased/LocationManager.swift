@@ -8,14 +8,20 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        locationManager.distanceFilter = 1.0 // Update location every 1 meter
+        locationManager.headingFilter = 5.0 // Update heading every 5 degrees
         locationManager.requestWhenInUseAuthorization()
-        locationManager.startUpdatingLocation() // Add this line
+        locationManager.startUpdatingLocation()
+        locationManager.startUpdatingHeading()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        location = locations.last
-        print("Location updated: \(String(describing: location?.coordinate))")
+        guard let newLocation = locations.last,
+              newLocation.horizontalAccuracy <= 20.0 else { return } // Only accept accurate readings
+        
+        location = newLocation
+        print("Location updated: \(newLocation.coordinate), accuracy: \(newLocation.horizontalAccuracy)m")
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

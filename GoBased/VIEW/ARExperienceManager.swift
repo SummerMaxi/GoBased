@@ -1,9 +1,16 @@
-// ARExperienceManager.swift
+//
+//  ARExperienceManager.swift
+//  GoBased
+//
+//  Created by NAVEEN on 07/12/24.
+//
+
+
 import Foundation
 import CoreLocation
 import Combine
 
-class ARExperienceManager: ObservableObject {
+final class ARExperienceManager: ObservableObject {
     @Published var isReady = false
     @Published var logoLocation: CLLocation?
     

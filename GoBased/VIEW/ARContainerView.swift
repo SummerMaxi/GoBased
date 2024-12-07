@@ -6,7 +6,7 @@ struct ARContainerView: View {
     
     var body: some View {
         ZStack {
-            ARViewContainer()
+            ARViewRepresentable()
                 .environmentObject(arExperience)
                 .environmentObject(locationManager)
             
